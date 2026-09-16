@@ -1,0 +1,10 @@
+{
+  "name": "StockLocal",
+  "short_name": "StockLocal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "description": "Inventario simple para negocios locales",
+  "icons": []
+}

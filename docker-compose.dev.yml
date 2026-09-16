@@ -1,0 +1,32 @@
+# Modo DEV con auto-reload — no pisa el compose de prod.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  api:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev"
+    environment:
+      PORT: "4000"
+      DATABASE_URL: "postgresql://stocklocal:stocklocal@db:5432/stocklocal"
+      # DEV ONLY: usa el JWT_SECRET del .env raíz si existe; si no, clave solo-dev.
+      # NUNCA desplegar con este valor. En prod el compose base exige JWT_SECRET real.
+      JWT_SECRET: "${JWT_SECRET:-solo-desarrollo-no-usar-en-produccion-00000000}"
+      FRONTEND_URL: "http://localhost:3000"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:4000"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api

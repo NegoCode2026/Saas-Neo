@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dirección: SaaS claro y limpio — azul brillante sobre neutros fríos.
+   Tokens: 1 base (zinc frío) + azul marca + rojo peligro + ámbar aviso. Nada más. */
+:root {
+  --tienda-700: #2563eb;
+  --tienda-800: #1d4ed8;
+  --papel: #f8fafc;
+  --tinta: #0b0d12;
+  --peligro: #dc2626;
+
+  /* Curvas (animate skill): nada de ease-in en UI ni ease built-in flojo */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-press: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply antialiased;
+  background: var(--papel);
+  color: var(--tinta);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
+}
+
+/* Accesibilidad: foco SIEMPRE visible, inputs sin zoom en iOS */
+:focus-visible {
+  outline: 2px solid var(--tienda-700);
+  outline-offset: 2px;
+}
+
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Touch: todo lo tappable mide mínimo 48px */
+button, a, input[type="submit"] {
+  min-height: 48px;
+}
+
+main {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Full-bleed: la landing ocupa el viewport dentro del main angosto.
+   Con márgenes (no transform) para no romper el sticky. */
+.bleed {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Superficie translúcida (apple-design §12). Fallback sólido + reduced-transparency. */
+.glass {
+  background: rgba(255, 255, 255, 0.94);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .glass {
+    background: rgba(255, 255, 255, 0.76);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Press: feedback en pointer-down, no en release (apple-design §1).
+   Solo transform+opacity+color. 140ms, curva ease-out fuerte. */
+.press {
+  transition: transform 140ms var(--ease-press), background-color 140ms var(--ease-press),
+    opacity 140ms var(--ease-press), border-color 140ms var(--ease-press);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* Hover solo en puntero fino: en táctil los hover falsos molestan (animate skill §7) */
+@media (hover: hover) and (pointer: fine) {
+  .press:hover {
+    transform: translateY(-1px);
+  }
+  .press:active {
+    transform: scale(0.97) translateY(0);
+  }
+
+  /* Lift para tarjetas: elevación física, solo puntero fino */
+  .lift {
+    transition: transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out),
+      border-color 240ms var(--ease-out);
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 40px -22px rgba(11, 13, 18, 0.28);
+  }
+}
+
+/* Entrada de listas: stagger corto (30-80ms), una sola vez */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise-in 300ms var(--ease-out) backwards;
+}
+
+/* Entrada del carrito POS: previene el cambio brusco cuando aparece */
+@keyframes cart-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.cart-in {
+  animation: cart-in 260ms var(--ease-out) both;
+}
+
+/* Punto de alerta: indicación de estado, pulso suave */
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.5);
+  }
+}
+.pulse-dot {
+  animation: pulse-soft 1800ms var(--ease-in-out) infinite;
+}
+
+/* Scroll reveal animation (ScrollRevealAnimation.tsx). Solo transform+opacity. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 620ms var(--ease-out), transform 620ms var(--ease-out);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Resplandor de marca del auth (azul + cian, clarito) */
+.auth-bg {
+  background:
+    radial-gradient(30rem 22rem at 12% 6%, rgba(59, 130, 246, 0.14), transparent 70%),
+    radial-gradient(28rem 24rem at 90% 92%, rgba(14, 165, 233, 0.12), transparent 70%),
+    var(--papel);
+}
+
+/* Marquee único de la landing: cinta de mercado. Movement constante → linear. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes marquee-x {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  .marquee-track {
+    animation: marquee-x 28s linear infinite;
+  }
+}
+
+/* Reduced motion: menos y más suave, no cero. Se mantiene opacidad/color. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal,
+  .rise,
+  .cart-in {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

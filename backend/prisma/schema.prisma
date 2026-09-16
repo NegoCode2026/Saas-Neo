@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  DUENO
+  EMPLEADO
+}
+
+enum EstadoPedido {
+  BORRADOR
+  ENVIADO
+  RECIBIDO
+  CANCELADO
+}
+
+enum MetodoPago {
+  EFECTIVO
+  NEQUI
+  TARJETA
+  TRANSFERENCIA
+}
+
+enum EstadoTurno {
+  ABIERTO
+  CERRADO
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+model Negocio {
+  id        String     @id @default(cuid())
+  nombre    String
+  nit       String?
+  // WhatsApp del negocio (solo dígitos): destino de los recordatorios.
+  whatsapp  String?
+  createdAt DateTime   @default(now())
+  usuarios  Usuario[]
+  productos Producto[]
+  ventas    Venta[]
+  movimientos Movimiento[]
+  proveedores Proveedor[]
+  pedidos     Pedido[]
+  cierres     CierreCaja[]
+  gastos      Gasto[]
+  turnos      TurnoCaja[]
+}
+
+model Usuario {
+  id               String    @id @default(cuid())
+  negocioId        String
+  negocio          Negocio   @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  nombre           String
+  email            String
+  password         String
+  rol              Rol       @default(EMPLEADO)
+  // Recuperación de contraseña: guardamos el hash del token, no el token.
+  resetTokenHash   String?
+  resetTokenExpira DateTime?
+  // Auditoría inversa: lo que registró cada usuario.
+  movimientosCreados Movimiento[] @relation("AuditoriaMovimiento")
+  ventasCreadas      Venta[]      @relation("AuditoriaVenta")
+  pedidosCreados     Pedido[]     @relation("AuditoriaPedido")
+  cierresCreados     CierreCaja[] @relation("AuditoriaCierre")
+  gastosCreados      Gasto[]      @relation("AuditoriaGasto")
+  turnosAbiertos     TurnoCaja[]  @relation("AperturaTurno")
+  turnosCerrados     TurnoCaja[]  @relation("CierreTurno")
+  createdAt        DateTime  @default(now())
+
+  @@unique([negocioId, email])
+  @@index([negocioId])
+}
+
+model Producto {
+  id           String   @id @default(cuid())
+  negocioId    String
+  negocio      Negocio  @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  nombre       String
+  categoria    String?
+  codigoBarras String?
+  precioCompra Int      // centavos COP para evitar floats
+  precioVenta  Int      // centavos COP
+  stockActual  Int      @default(0)
+  stockMinimo  Int      @default(5)
+  // Vencimiento: fecha del lote más próximo. Null = no perecedero.
+  fechaVencimiento DateTime?
+  // Fecha en que se agregó el producto. Si no se indica, queda la actual.
+  fechaAgregado DateTime @default(now())
+  // Soft-delete: nunca borramos un producto con historial de ventas.
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  movimientos  Movimiento[]
+  ventaItems   VentaItem[]
+  pedidoItems  PedidoItem[]
+
+  @@index([negocioId, activo])
+  @@index([negocioId, nombre])
+}
+
+model Movimiento {
+  id         String         @id @default(cuid())
+  negocioId  String
+  negocio    Negocio        @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  productoId String
+  producto   Producto       @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  tipo       TipoMovimiento
+  cantidad   Int
+  motivo     String?
+  // Auditoría: quién registró cada movimiento (nunca se borra el rastro).
+  creadoPorId String?
+  creadoPor   Usuario? @relation("AuditoriaMovimiento", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime       @default(now())
+
+  @@index([negocioId, productoId])
+}
+
+model Venta {
+  id             String      @id @default(cuid())
+  negocioId      String
+  negocio        Negocio     @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  total          Int         // centavos COP (subtotal menos descuento)
+  // Clave de idempotencia: permite reintentar una venta encolada offline
+  // sin duplicarla. Nullable para ventas online normales.
+  idempotencyKey String?
+  // Promoción: descuento absoluto en centavos sobre el subtotal.
+  // Tope por rol (un empleado no puede regalar la tienda).
+  descuento      Int      @default(0)
+  // Cómo pagó el cliente. El arqueo de caja cuadra solo el efectivo.
+  metodoPago     MetodoPago @default(EFECTIVO)
+  // Auditoría: quién cobró la venta.
+  creadoPorId String?
+  creadoPor   Usuario? @relation("AuditoriaVenta", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+  items          VentaItem[]
+
+  @@unique([negocioId, idempotencyKey])
+  @@index([negocioId, createdAt])
+}
+
+model VentaItem {
+  id         String   @id @default(cuid())
+  ventaId    String
+  venta      Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  productoId String
+  producto   Producto @relation(fields: [productoId], references: [id])
+  cantidad   Int
+  precioUnit Int      // snapshot en centavos
+}
+
+model Proveedor {
+  id        String  @id @default(cuid())
+  negocioId String
+  negocio   Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  nombre    String
+  telefono  String?
+  createdAt DateTime @default(now())
+  pedidos   Pedido[]
+
+  @@index([negocioId])
+}
+
+model Pedido {
+  id          String       @id @default(cuid())
+  negocioId   String
+  negocio     Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  proveedorId String
+  proveedor   Proveedor    @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  estado      EstadoPedido @default(BORRADOR)
+  creadoPorId String?
+  creadoPor   Usuario?     @relation("AuditoriaPedido", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  recibidoAt  DateTime?
+  // Foto de la factura/remisión como comprobante (dataURL JPEG/PNG, comprimida).
+  comprobanteUrl String?
+  items       PedidoItem[]
+
+  @@index([negocioId, estado])
+}
+
+model PedidoItem {
+  id         String   @id @default(cuid())
+  pedidoId   String
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  productoId String
+  producto   Producto @relation(fields: [productoId], references: [id])
+  cantidad   Int
+
+  @@index([pedidoId])
+}
+
+model CierreCaja {
+  // Arqueo: foto de la caja al cerrar. esperado = ventas en EFECTIVO desde el
+  // último cierre; contado = lo que hay físicamente; diferencia = contado - esperado.
+  id          String   @id @default(cuid())
+  negocioId   String
+  negocio     Negocio  @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  esperado    Int      // centavos COP
+  contado     Int      // centavos COP
+  diferencia  Int      // contado - esperado (puede ser negativa)
+  ventas      Int      // cantidad de ventas en efectivo del período
+  notas       String?
+  creadoPorId String?
+  creadoPor   Usuario? @relation("AuditoriaCierre", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  // Turno al que pertenece el arqueo (null = cierre sin turno).
+  turnoId     String?
+  turno       TurnoCaja? @relation(fields: [turnoId], references: [id], onDelete: SetNull)
+
+  @@index([negocioId, createdAt])
+}
+
+model TurnoCaja {
+  // Turno: quién abrió, con cuánto fondo, cuándo se cerró. El arqueo
+  // (CierreCaja) se enlaza al cerrar. Uno abierto por negocio a la vez.
+  id           String      @id @default(cuid())
+  negocioId    String
+  negocio      Negocio     @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  estado       EstadoTurno @default(ABIERTO)
+  fondoInicial Int         @default(0) // centavos COP
+  abiertoPorId String?
+  abiertoPor   Usuario?    @relation("AperturaTurno", fields: [abiertoPorId], references: [id], onDelete: SetNull)
+  cerradoPorId String?
+  cerradoPor   Usuario?    @relation("CierreTurno", fields: [cerradoPorId], references: [id], onDelete: SetNull)
+  abiertoAt    DateTime    @default(now())
+  cerradoAt    DateTime?
+  cierres      CierreCaja[]
+
+  @@index([negocioId, estado])
+}
+
+model Gasto {
+  // Egresos que salen de la caja (luz, arriendo, transporte): la ganancia
+  // real los resta. No mueven stock, solo plata.
+  id          String   @id @default(cuid())
+  negocioId   String
+  negocio     Negocio  @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  concepto    String
+  categoria   String?
+  monto       Int      // centavos COP
+  fecha       DateTime @default(now())
+  // Clave de idempotencia: reintentos offline sin duplicar el gasto.
+  idempotenciaKey String?
+  creadoPorId String?
+  creadoPor   Usuario? @relation("AuditoriaGasto", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@unique([negocioId, idempotenciaKey])
+  @@index([negocioId, fecha])
+}

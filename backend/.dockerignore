@@ -1,0 +1,14 @@
+# Nunca copiar secretos ni estado local a la imagen
+.env
+.env.*
+*.log
+node_modules
+dist
+.git
+.gitignore
+Dockerfile*
+docker-compose*.yml
+pgdata/
+backups/
+*.tsbuildinfo
+npm-debug.log
